@@ -1,13 +1,15 @@
 'use client';
 
 import React, { useState } from 'react';
-import { LogIn } from 'lucide-react';
+import { LogIn, UserRound } from 'lucide-react';
 import { MedicalProfile } from '@/lib/types';
 
 interface HeaderProps {
   currentTab: string;
   medicalProfile: MedicalProfile;
   liveAqi?: number;
+  userName: string;
+  avatarUrl: string | null;
   isLoggedIn: boolean;
   onProfileClick: () => void;
   onSecretTrigger?: () => void;
@@ -24,6 +26,8 @@ const SUBTITLE: Record<string, string> = {
 export default function Header({
   currentTab,
   liveAqi = 18,
+  userName,
+  avatarUrl,
   isLoggedIn,
   onProfileClick,
   onSecretTrigger,
@@ -65,14 +69,12 @@ export default function Header({
             <button
               onClick={onProfileClick}
               className="relative p-0.5 rounded-full hover:scale-105 active:scale-95 transition-all focus:outline-none"
-              title="Profil Sarah Maharani"
+              title={`Profil ${userName}`}
             >
               <div className="w-8 h-8 rounded-full overflow-hidden bg-slate-200 border-2 border-white shadow-sm flex items-center justify-center">
-                <img
-                  src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=120&q=80"
-                  alt="Sarah Maharani"
-                  className="w-full h-full object-cover"
-                />
+                {avatarUrl
+                  ? <img src={avatarUrl} alt={userName} className="w-full h-full object-cover" />
+                  : <UserRound className="w-4 h-4 text-[#5C7267]" aria-label={`Avatar ${userName}`} />}
               </div>
             </button>
           ) : (

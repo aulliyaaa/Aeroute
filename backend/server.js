@@ -5,8 +5,14 @@ import apiRoutes from './src/routes/api.js';
 
 const app = express();
 
-app.use(cors({ origin: '*' }));
-app.use(express.json());
+const allowedOrigins = new Set(config.corsOrigins);
+app.use(cors({
+  origin(origin, callback) {
+    if (!origin || allowedOrigins.has(origin)) return callback(null, true);
+    return callback(new Error('Origin tidak diizinkan oleh CORS.'));
+  }
+}));
+app.use(express.json({ limit: '32kb' }));
 
 app.use('/api', apiRoutes);
 

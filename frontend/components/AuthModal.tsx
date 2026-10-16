@@ -2,44 +2,47 @@
 
 import React, { useState } from 'react';
 import { Mail, ArrowRight, Check, Lock, Sparkles, User, ShieldCheck } from 'lucide-react';
-import { MedicalProfile } from '@/lib/types';
+import { loginAccount, registerAccount } from '@/lib/api';
+import { AuthResult, MedicalProfile } from '@/lib/types';
 import MascotAI from './MascotAI';
 
 interface AuthScreenProps {
-  onLoginSuccess: (userProfile: { name: string; profile: MedicalProfile }) => void;
+  onLoginSuccess: (result: AuthResult) => void;
+  onDemoLogin: () => void;
   onSkip?: () => void;
 }
 
 export default function AuthScreen({
   onLoginSuccess,
+  onDemoLogin,
   onSkip,
 }: AuthScreenProps) {
   const [step, setStep] = useState<1 | 2 | 3>(1);
-  const [name, setName] = useState('Sarah Maharani');
-  const [email, setEmail] = useState('sarah.maharani@aeroute.id');
+  const [authMode, setAuthMode] = useState<'register' | 'login'>('register');
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [selectedProfile, setSelectedProfile] = useState<MedicalProfile>('asthma');
   const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleDemoLogin = () => {
-    setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
-      onLoginSuccess({
-        name: 'Sarah Maharani',
-        profile: 'asthma',
-      });
-    }, 400);
+    onDemoLogin();
   };
 
-  const handleFinish = () => {
+  const handleFinish = async () => {
     setIsLoading(true);
-    setTimeout(() => {
+    setErrorMessage(null);
+    try {
+      const result = authMode === 'register'
+        ? await registerAccount({ name, email, password, medicalProfile: selectedProfile })
+        : await loginAccount(email, password);
+      onLoginSuccess(result);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Tidak dapat menghubungi server.');
+    } finally {
       setIsLoading(false);
-      onLoginSuccess({
-        name: name || 'Pengguna AeroRoute',
-        profile: selectedProfile,
-      });
-    }, 500);
+    }
   };
 
   return (
@@ -105,7 +108,7 @@ export default function AuthScreen({
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-full overflow-hidden bg-slate-200 border-2 border-[#245C49] shrink-0">
                     <img
-                      src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=120&q=80"
+                      src="/mascot/profileee.jpg"
                       alt="Sarah"
                       className="w-full h-full object-cover"
                     />
@@ -129,6 +132,16 @@ export default function AuthScreen({
               >
                 <span>Atur Profil Napas Sendiri</span>
                 <ArrowRight className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => {
+                  setAuthMode('login');
+                  setErrorMessage(null);
+                  setStep(3);
+                }}
+                className="w-full py-2 text-xs font-bold text-[#245C49] hover:underline"
+              >
+                Sudah punya akun? Masuk
               </button>
             </div>
           </div>
@@ -212,27 +225,32 @@ export default function AuthScreen({
                 <MascotAI pose="jump" size="xl" showBadge={true} altText="aeroJump.png" />
               </div>
               <h2 className="text-xl font-black text-[#192A24] tracking-tight">
-                Hore, Profilmu Siap! 🎉
+                {authMode === 'register' ? 'Lengkapi Akunmu' : 'Masuk ke AeroRoute'}
               </h2>
               <p className="text-xs text-[#5C7267]">
-                Aero siap memandu perjalanan sehatmu di area perkotaan.
+                {authMode === 'register'
+                  ? 'Aero siap menyimpan profil dan perjalananmu.'
+                  : 'Gunakan email dan password akunmu.'}
               </p>
             </div>
 
             <div className="space-y-3 bg-white p-4 rounded-2xl border border-[#E3ECE6] shadow-sm">
-              <div className="space-y-1">
-                <label className="text-[11px] font-bold text-[#5C7267] block">Nama Lengkap</label>
-                <div className="relative">
-                  <User className="w-4 h-4 text-slate-400 absolute left-3 top-3 pointer-events-none" />
-                  <input
-                    type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="Nama Anda"
-                    className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-[#F8FAF8] border border-[#E3ECE6] text-xs font-bold text-[#192A24] focus:outline-none focus:border-[#245C49]"
-                  />
+              {authMode === 'register' && (
+                <div className="space-y-1">
+                  <label className="text-[11px] font-bold text-[#5C7267] block">Nama Lengkap</label>
+                  <div className="relative">
+                    <User className="w-4 h-4 text-slate-400 absolute left-3 top-3 pointer-events-none" />
+                    <input
+                      type="text"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="Nama Anda"
+                      autoComplete="name"
+                      className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-[#F8FAF8] border border-[#E3ECE6] text-xs font-bold text-[#192A24] focus:outline-none focus:border-[#245C49]"
+                    />
+                  </div>
                 </div>
-              </div>
+              )}
 
               <div className="space-y-1">
                 <label className="text-[11px] font-bold text-[#5C7267] block">Email</label>
@@ -243,19 +261,39 @@ export default function AuthScreen({
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="nama@email.com"
+                    autoComplete="email"
+                    className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-[#F8FAF8] border border-[#E3ECE6] text-xs font-bold text-[#192A24] focus:outline-none focus:border-[#245C49]"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-[#5C7267] block">Password</label>
+                <div className="relative">
+                  <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-3 pointer-events-none" />
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Minimal 8 karakter"
+                    autoComplete={authMode === 'register' ? 'new-password' : 'current-password'}
                     className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-[#F8FAF8] border border-[#E3ECE6] text-xs font-bold text-[#192A24] focus:outline-none focus:border-[#245C49]"
                   />
                 </div>
               </div>
             </div>
 
-            <div className="p-3 rounded-xl bg-[#E8F0EB] border border-[#CDE5D7] flex items-center justify-between text-xs">
+            {authMode === 'register' && <div className="p-3 rounded-xl bg-[#E8F0EB] border border-[#CDE5D7] flex items-center justify-between text-xs">
               <span className="text-[#5C7267] font-medium">Profil Kesehatan:</span>
               <span className="font-black text-[#245C49] uppercase flex items-center gap-1">
                 <ShieldCheck className="w-4 h-4 text-[#245C49]" />
                 {selectedProfile}
               </span>
-            </div>
+            </div>}
+
+            {errorMessage && (
+              <p role="alert" className="text-xs font-semibold text-[#D9534F]">{errorMessage}</p>
+            )}
           </div>
         )}
       </div>
@@ -263,7 +301,14 @@ export default function AuthScreen({
       {step > 1 && (
         <div className="flex items-center gap-2 shrink-0 pt-2 border-t border-[#E3ECE6]">
           <button
-            onClick={() => setStep((s) => (s - 1) as 1 | 2)}
+            onClick={() => {
+              if (authMode === 'login') {
+                setAuthMode('register');
+                setStep(1);
+              } else {
+                setStep((s) => (s - 1) as 1 | 2);
+              }
+            }}
             className="py-3 px-5 rounded-2xl bg-[#F8FAF8] hover:bg-[#E8F0EB] text-[#5C7267] font-bold text-xs border border-[#E3ECE6] transition-all"
           >
             Kembali
@@ -280,10 +325,10 @@ export default function AuthScreen({
           ) : (
             <button
               onClick={handleFinish}
-              disabled={isLoading}
+              disabled={isLoading || !email || !password || (authMode === 'register' && !name)}
               className="flex-1 py-3 px-4 rounded-2xl bg-[#245C49] hover:bg-[#1B4738] text-white font-extrabold text-xs shadow-md transition-all flex items-center justify-center gap-1.5 active:scale-[0.98]"
             >
-              <span>{isLoading ? 'Menyimpan...' : 'Selesai & Masuk'}</span>
+              <span>{isLoading ? 'Menghubungkan...' : authMode === 'register' ? 'Buat Akun & Masuk' : 'Masuk'}</span>
             </button>
           )}
         </div>

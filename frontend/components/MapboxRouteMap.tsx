@@ -12,10 +12,33 @@ interface MapboxRouteMapProps {
   originName?: string;
   destName?: string;
   isSimulating?: boolean;
+  routeGeometries?: {
+    green: [number, number][] | null;
+    red: [number, number][] | null;
+  };
+  exposureReductionPercent?: number;
+  originCoordinates?: [number, number];
+  destinationCoordinates?: [number, number];
 }
 
 const DEFAULT_MAPBOX_TOKEN =
   'pk.eyJ1IjoiOW1hbnVzaWEiLCJhIjoiY212OW5rYmZiMDJ3dTJ3cTF2am1oZGpmNiJ9.e7hRdqqwVtEw4y1KZwHGfQ';
+const DEFAULT_ORIGIN_COORDINATES: [number, number] = [106.8041, -6.2255];
+const DEFAULT_DESTINATION_COORDINATES: [number, number] = [106.7822, -6.2017];
+const DEFAULT_GREEN_COORDINATES: [number, number][] = [
+  [106.8041, -6.2255], [106.8015, -6.2220], [106.7990, -6.2165],
+  [106.7945, -6.2105], [106.7880, -6.2060], [106.7822, -6.2017],
+];
+const DEFAULT_RED_COORDINATES: [number, number][] = [
+  [106.8041, -6.2255], [106.8166, -6.2185], [106.8110, -6.2120],
+  [106.8000, -6.2050], [106.7822, -6.2017],
+];
+
+const routeFeature = (coordinates: [number, number][]) => ({
+  type: 'Feature' as const,
+  properties: {},
+  geometry: { type: 'LineString' as const, coordinates },
+});
 
 export default function MapboxRouteMap({
   selectedRoute,
@@ -25,9 +48,15 @@ export default function MapboxRouteMap({
   originName = 'FX Sudirman (Pintu Senayan)',
   destName = 'Kampus Binus Anggrek',
   isSimulating = false,
+  routeGeometries,
+  exposureReductionPercent,
+  originCoordinates,
+  destinationCoordinates,
 }: MapboxRouteMapProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
+  const startMarkerRef = useRef<any>(null);
+  const endMarkerRef = useRef<any>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [useFallback, setUseFallback] = useState(false);
   const [carProgress, setCarProgress] = useState(0);
@@ -70,39 +99,17 @@ export default function MapboxRouteMap({
             if (!isMounted) return;
             setMapLoaded(true);
 
-            const greenGeojson = {
-              type: 'Feature',
-              properties: {},
-              geometry: {
-                type: 'LineString',
-                coordinates: [
-                  [106.8041, -6.2255],
-                  [106.8015, -6.2220],
-                  [106.7990, -6.2165],
-                  [106.7945, -6.2105],
-                  [106.7880, -6.2060],
-                  [106.7822, -6.2017],
-                ],
-              },
-            };
+            const greenCoordinates = routeGeometries?.green || DEFAULT_GREEN_COORDINATES;
+            const redCoordinates = routeGeometries?.red || DEFAULT_RED_COORDINATES;
 
-            const redGeojson = {
-              type: 'Feature',
-              properties: {},
-              geometry: {
-                type: 'LineString',
-                coordinates: [
-                  [106.8041, -6.2255],
-                  [106.8166, -6.2185],
-                  [106.8110, -6.2120],
-                  [106.8000, -6.2050],
-                  [106.7822, -6.2017],
-                ],
-              },
-            };
-
-            map.addSource('route-green', { type: 'geojson', data: greenGeojson as any });
-            map.addSource('route-red', { type: 'geojson', data: redGeojson as any });
+            map.addSource('route-green', {
+              type: 'geojson',
+              data: routeFeature(greenCoordinates) as any,
+            });
+            map.addSource('route-red', {
+              type: 'geojson',
+              data: routeFeature(redCoordinates) as any,
+            });
 
             map.addLayer({
               id: 'route-green-casing',
@@ -143,12 +150,16 @@ export default function MapboxRouteMap({
             const startEl = document.createElement('div');
             startEl.className = 'w-5 h-5 rounded-full bg-[#245C49] border-2 border-white shadow-md flex items-center justify-center';
             startEl.innerHTML = '<div class="w-2 h-2 rounded-full bg-white"></div>';
-            new mapboxgl.Marker(startEl).setLngLat([106.8041, -6.2255]).addTo(map);
+            startMarkerRef.current = new mapboxgl.Marker(startEl)
+              .setLngLat(originCoordinates || DEFAULT_ORIGIN_COORDINATES)
+              .addTo(map);
 
             const endEl = document.createElement('div');
             endEl.className = 'w-5 h-5 rounded-full bg-[#245C49] border-2 border-white shadow-md flex items-center justify-center';
             endEl.innerHTML = '<div class="w-2 h-2 rounded-full bg-white"></div>';
-            new mapboxgl.Marker(endEl).setLngLat([106.7822, -6.2017]).addTo(map);
+            endMarkerRef.current = new mapboxgl.Marker(endEl)
+              .setLngLat(destinationCoordinates || DEFAULT_DESTINATION_COORDINATES)
+              .addTo(map);
           });
 
           map.on('error', () => {
@@ -172,6 +183,26 @@ export default function MapboxRouteMap({
       }
     };
   }, []);
+
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map || !mapLoaded) return;
+
+    const greenSource = map.getSource('route-green');
+    const redSource = map.getSource('route-red');
+    greenSource?.setData(routeFeature(routeGeometries?.green || DEFAULT_GREEN_COORDINATES));
+    redSource?.setData(routeFeature(routeGeometries?.red || DEFAULT_RED_COORDINATES));
+    startMarkerRef.current?.setLngLat(originCoordinates || DEFAULT_ORIGIN_COORDINATES);
+    endMarkerRef.current?.setLngLat(destinationCoordinates || DEFAULT_DESTINATION_COORDINATES);
+  }, [
+    mapLoaded,
+    routeGeometries?.green,
+    routeGeometries?.red,
+    originCoordinates?.[0],
+    originCoordinates?.[1],
+    destinationCoordinates?.[0],
+    destinationCoordinates?.[1],
+  ]);
 
   useEffect(() => {
     const map = mapInstanceRef.current;
@@ -356,7 +387,7 @@ export default function MapboxRouteMap({
 
         <div className="pointer-events-auto flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-white/95 text-xs font-bold text-[#245C49] shadow-sm border border-[#E3ECE6]">
           <Sparkles className="w-3.5 h-3.5 text-[#245C49]" />
-          <span>-38% Polusi</span>
+          <span>-{exposureReductionPercent ?? 38}% Paparan</span>
         </div>
       </div>
 

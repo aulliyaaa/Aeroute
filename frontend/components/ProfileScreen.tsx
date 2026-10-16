@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   ShieldCheck,
   User,
@@ -12,55 +12,102 @@ import {
   Baby,
   Activity,
   Check,
+  Camera,
   LogOut,
   LogIn,
 } from 'lucide-react';
-import { MedicalProfile } from '@/lib/types';
+import { MedicalProfile, RouteStrategy, SavedTrip, TransportMode } from '@/lib/types';
 import MascotAI from './MascotAI';
 
 interface ProfileScreenProps {
+  userName: string;
+  email?: string;
+  avatarUrl: string | null;
+  isAvatarUploading: boolean;
+  onUploadAvatar: (file: File) => void;
   medicalProfile: MedicalProfile;
   onChangeProfile: (p: MedicalProfile) => void;
+  transportMode: TransportMode;
+  onChangeTransportMode: (mode: TransportMode) => void;
+  strategy: RouteStrategy;
+  onChangeStrategy: (strategy: RouteStrategy) => void;
+  trips: SavedTrip[];
+  isDemoMode: boolean;
   isLoggedIn: boolean;
   onLogout: () => void;
   onOpenLogin: () => void;
 }
 
 export default function ProfileScreen({
+  userName,
+  email,
+  avatarUrl,
+  isAvatarUploading,
+  onUploadAvatar,
   medicalProfile,
   onChangeProfile,
+  transportMode,
+  onChangeTransportMode,
+  strategy,
+  onChangeStrategy,
+  trips,
+  isDemoMode,
   isLoggedIn,
   onLogout,
   onOpenLogin,
 }: ProfileScreenProps) {
-  const [strategy, setStrategy] = useState<'balance' | 'cleanest'>('balance');
-  const [transport, setTransport] = useState<'motor' | 'mobil' | 'jalan'>('motor');
-
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const totalMinutes = trips.reduce((total, trip) => total + trip.durationMinutes, 0);
+  const averageAqi = trips.length
+    ? Math.round(trips.reduce((total, trip) => total + trip.aqi, 0) / trips.length)
+    : null;
+  const exposureReductions = trips
+    .map((trip) => trip.exposureReductionPercent)
+    .filter((value): value is number => value !== null);
+  const averageReduction = exposureReductions.length
+    ? Math.round(exposureReductions.reduce((total, value) => total + value, 0) / exposureReductions.length)
+    : null;
   return (
     <div className="space-y-4 pb-20 animate-in fade-in duration-300">
       <div className="p-4 rounded-2xl bg-white border border-[#E3ECE6] shadow-sm space-y-3">
         <div className="flex items-center gap-3">
           <div className="relative">
             <div className="w-14 h-14 rounded-full overflow-hidden bg-slate-200 border-2 border-[#245C49] shadow-sm">
-              <img
-                src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=200&q=80"
-                alt="Sarah Maharani"
-                className="w-full h-full object-cover"
-              />
+              {avatarUrl
+                ? <img src={avatarUrl} alt={userName} className="w-full h-full object-cover" />
+                : <div className="w-full h-full flex items-center justify-center text-[#5C7267]"><User className="w-7 h-7" /></div>}
             </div>
-            <div className="absolute -bottom-1 -right-1 p-1 rounded-full bg-[#245C49] text-white border-2 border-white">
-              <ShieldCheck className="w-3.5 h-3.5" />
-            </div>
+            <input
+              ref={avatarInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              className="sr-only"
+              onChange={(event) => {
+                const file = event.currentTarget.files?.[0];
+                if (file) onUploadAvatar(file);
+                event.currentTarget.value = '';
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => avatarInputRef.current?.click()}
+              disabled={isAvatarUploading}
+              aria-label="Unggah foto profil"
+              title={isAvatarUploading ? 'Mengunggah foto' : 'Unggah foto profil'}
+              className="absolute -bottom-1 -right-1 p-1.5 rounded-full bg-[#245C49] text-white border-2 border-white disabled:opacity-60"
+            >
+              <Camera className="w-3.5 h-3.5" />
+            </button>
           </div>
 
           <div className="flex-1">
             <div className="flex items-center gap-1.5">
-              <h2 className="text-base font-black text-[#192A24]">Sarah Maharani</h2>
+              <h2 className="text-base font-black text-[#192A24]">{userName}</h2>
               <ShieldCheck className="w-4 h-4 text-[#245C49]" />
             </div>
-            <p className="text-[11px] text-[#5C7267]">ID: AR-88429 • Jakarta Selatan</p>
+            <p className="text-[11px] text-[#5C7267]">{email || 'Mode demo'} • Jakarta</p>
             <span className="inline-block mt-1 px-2.5 py-0.5 rounded-full bg-[#E8F0EB] text-[#245C49] text-[10px] font-bold border border-[#CDE5D7]">
-              ● Urban Commuter • Sensitivitas Tinggi
+              ● {isDemoMode ? 'Profil Demo' : 'Profil Aktif'} • {medicalProfile.replace('_', ' ')}
             </span>
           </div>
         </div>
@@ -169,7 +216,7 @@ export default function ProfileScreen({
           </span>
 
           <div
-            onClick={() => setStrategy('balance')}
+            onClick={() => onChangeStrategy('balance')}
             className={`p-3 rounded-2xl border flex items-start gap-2.5 cursor-pointer transition-all ${
               strategy === 'balance'
                 ? 'bg-[#E8F0EB] border-[#245C49]'
@@ -196,7 +243,7 @@ export default function ProfileScreen({
           </div>
 
           <div
-            onClick={() => setStrategy('cleanest')}
+            onClick={() => onChangeStrategy('cleanest')}
             className={`p-3 rounded-2xl border flex items-start gap-2.5 cursor-pointer transition-all ${
               strategy === 'cleanest'
                 ? 'bg-[#E8F0EB] border-[#245C49]'
@@ -236,9 +283,9 @@ export default function ProfileScreen({
         </div>
 
         <div
-          onClick={() => setTransport('motor')}
+          onClick={() => onChangeTransportMode('motor')}
           className={`p-3 rounded-2xl border flex items-center justify-between cursor-pointer transition-all ${
-            transport === 'motor'
+            transportMode === 'motor'
               ? 'bg-[#E8F0EB] border-[#245C49]'
               : 'bg-white border-[#E3ECE6]'
           }`}
@@ -259,17 +306,17 @@ export default function ProfileScreen({
           </div>
           <div
             className={`w-4 h-4 rounded-full border flex items-center justify-center ${
-              transport === 'motor' ? 'border-[#245C49] bg-[#245C49]' : 'border-[#CBD5E1]'
+              transportMode === 'motor' ? 'border-[#245C49] bg-[#245C49]' : 'border-[#CBD5E1]'
             }`}
           >
-            {transport === 'motor' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+            {transportMode === 'motor' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
           </div>
         </div>
 
         <div
-          onClick={() => setTransport('mobil')}
+          onClick={() => onChangeTransportMode('mobil')}
           className={`p-3 rounded-2xl border flex items-center justify-between cursor-pointer transition-all ${
-            transport === 'mobil'
+            transportMode === 'mobil'
               ? 'bg-[#E8F0EB] border-[#245C49]'
               : 'bg-white border-[#E3ECE6]'
           }`}
@@ -285,17 +332,17 @@ export default function ProfileScreen({
           </div>
           <div
             className={`w-4 h-4 rounded-full border flex items-center justify-center ${
-              transport === 'mobil' ? 'border-[#245C49] bg-[#245C49]' : 'border-[#CBD5E1]'
+              transportMode === 'mobil' ? 'border-[#245C49] bg-[#245C49]' : 'border-[#CBD5E1]'
             }`}
           >
-            {transport === 'mobil' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+            {transportMode === 'mobil' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
           </div>
         </div>
 
         <div
-          onClick={() => setTransport('jalan')}
+          onClick={() => onChangeTransportMode('jalan')}
           className={`p-3 rounded-2xl border flex items-center justify-between cursor-pointer transition-all ${
-            transport === 'jalan'
+            transportMode === 'jalan' || transportMode === 'sepeda'
               ? 'bg-[#E8F0EB] border-[#245C49]'
               : 'bg-white border-[#E3ECE6]'
           }`}
@@ -311,10 +358,10 @@ export default function ProfileScreen({
           </div>
           <div
             className={`w-4 h-4 rounded-full border flex items-center justify-center ${
-              transport === 'jalan' ? 'border-[#245C49] bg-[#245C49]' : 'border-[#CBD5E1]'
+              transportMode === 'jalan' || transportMode === 'sepeda' ? 'border-[#245C49] bg-[#245C49]' : 'border-[#CBD5E1]'
             }`}
           >
-            {transport === 'jalan' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+            {(transportMode === 'jalan' || transportMode === 'sepeda') && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
           </div>
         </div>
       </div>
@@ -324,50 +371,54 @@ export default function ProfileScreen({
           <div className="flex items-center gap-1.5">
             <Activity className="w-4 h-4 text-[#245C49]" />
             <h3 className="text-xs font-bold text-[#192A24] uppercase tracking-wider">
-              Dampak Sehat Bulan Ini
+              Ringkasan Perjalanan
             </h3>
           </div>
-          <span className="text-[11px] font-semibold text-[#5C7267]">Mei 2024</span>
+            <span className="text-[11px] font-semibold text-[#5C7267]">Semua waktu</span>
         </div>
 
         <div className="grid grid-cols-3 gap-2 text-center">
           <div className="p-3 rounded-2xl bg-[#E8F0EB] border border-[#CDE5D7]">
-            <span className="text-xl font-black text-[#245C49]">14</span>
+              <span className="text-xl font-black text-[#245C49]">{trips.length}</span>
             <span className="block text-[10px] text-[#5C7267] font-medium leading-tight mt-1">
-              Perjalanan Rendah Paparan
+                {isDemoMode ? 'Trip Demo Sesi Ini' : 'Perjalanan Tercatat'}
             </span>
           </div>
 
           <div className="p-3 rounded-2xl bg-[#E8F0EB] border border-[#CDE5D7]">
-            <span className="text-xl font-black text-[#245C49]">3.5j</span>
+              <span className="text-xl font-black text-[#245C49]">{(totalMinutes / 60).toFixed(1)}j</span>
             <span className="block text-[10px] text-[#5C7267] font-medium leading-tight mt-1">
-              Udara Lebih Bersih
+                Waktu Tempuh
             </span>
           </div>
 
           <div className="p-3 rounded-2xl bg-[#CDE5D7] border border-[#BFE0CD]">
-            <span className="text-xl font-black text-[#245C49]">-41%</span>
+              <span className="text-xl font-black text-[#245C49]">{averageAqi ?? '—'}</span>
             <span className="block text-[10px] text-[#245C49] font-bold leading-tight mt-1">
-              Akumulasi PM2.5
+                AQI Rata-rata
             </span>
           </div>
         </div>
 
         <div className="p-3 rounded-2xl bg-[#F8FAF8] border border-[#E3ECE6] space-y-2">
           <div className="flex items-center justify-between text-xs">
-            <span className="text-[#5C7267]">Pengurangan Beban Pernapasan</span>
-            <span className="font-bold text-[#245C49]">Optimal (82/100)</span>
+            <span className="text-[#5C7267]">Pengurangan Paparan dari Analisis</span>
+            <span className="font-bold text-[#245C49]">{averageReduction === null ? '—' : `${averageReduction}%`}</span>
           </div>
 
           <div className="w-full h-2.5 bg-[#E8F0EB] rounded-full overflow-hidden">
             <div
               className="h-full bg-[#245C49] rounded-full"
-              style={{ width: '82%' }}
+              style={{ width: `${averageReduction ?? 0}%` }}
             />
           </div>
 
           <p className="text-[10px] text-[#5C7267] leading-snug">
-            Estimasi paparan inhalasi Anda 2.3x lebih rendah dibandingkan rute jalan protokol standar Jakarta.
+            {isDemoMode
+              ? 'Ringkasan demo hanya tersedia selama sesi ini.'
+              : trips.length
+                ? 'Ringkasan dihitung dari perjalanan yang tersimpan di akun ini.'
+                : 'Selesaikan perjalanan untuk mulai membangun ringkasan akun.'}
           </p>
         </div>
       </div>

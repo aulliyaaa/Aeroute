@@ -17,27 +17,99 @@ import {
   AlertTriangle,
   Zap,
 } from 'lucide-react';
-import { ScenarioPreset } from '@/lib/types';
+import { EnvironmentData, ScenarioPreset, TransportMode } from '@/lib/types';
 import MascotAI from './MascotAI';
 
 interface HomeScreenProps {
   onGoToRoute: () => void;
-  onSelectDestination: (presetKey: string) => void;
+  onSelectDestination: (presetKey: string, transportMode: TransportMode) => void;
+  onSearchDestination: (query: string, transportMode: TransportMode) => void;
+  transportMode: TransportMode;
+  onChangeTransportMode: (mode: TransportMode) => void;
+  environment: EnvironmentData | null;
+  userName: string;
+  isDemoMode: boolean;
   scenario: ScenarioPreset;
   pollutionSpike: boolean;
+  onLocationDetected?: (lat: number, lon: number) => void;
 }
 
 export default function HomeScreen({
   onGoToRoute,
   onSelectDestination,
+  onSearchDestination,
+  transportMode,
+  onChangeTransportMode,
+  environment,
+  userName,
+  isDemoMode,
   scenario,
   pollutionSpike,
+  onLocationDetected,
 }: HomeScreenProps) {
-  const [transportMode, setTransportMode] = useState<'motor' | 'mobil' | 'sepeda' | 'jalan'>('motor');
   const [searchQuery, setSearchQuery] = useState('');
   const [mascotTipIndex, setMascotTipIndex] = useState(0);
 
-  const hasPollutionWarning = pollutionSpike || scenario.currentAqi > 100;
+  const [gpsName, setGpsName] = useState<string | null>(null);
+
+React.useEffect(() => {
+  if (!('geolocation' in navigator)) return;
+
+  const controller = new AbortController();
+
+  navigator.geolocation.getCurrentPosition(
+    async (position) => {
+      const { latitude, longitude } = position.coords;
+
+      onLocationDetected?.(+latitude.toFixed(3), +longitude.toFixed(3));
+
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${latitude}&lon=${longitude}&zoom=16&addressdetails=1&accept-language=id`,
+          { signal: controller.signal }
+        );
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+        const data = await res.json();
+        const a = data.address ?? {};
+        const area = a.suburb || a.neighbourhood || a.village || a.quarter || a.city_district;
+        const city = a.city || a.town || a.county || a.state;
+        const name = [area, city].filter(Boolean).join(', ');
+
+        if (name) setGpsName(name);
+      } catch (err) {
+        if ((err as Error).name === 'AbortError') return;
+        console.warn('Reverse geocoding gagal:', err);
+      }
+    },
+    (error) => {
+      console.warn('Akses GPS ditolak/gagal:', error.message);
+    },
+    { enableHighAccuracy: true, timeout: 10000 }
+  );
+
+  return () => controller.abort();
+  }, []); 
+
+const detectedLocation =
+  gpsName ?? environment?.locationName ?? scenario.currentLocationName ?? 'Mendeteksi GPS...';
+
+  const currentAqi = pollutionSpike ? 210 : environment?.aqi ?? scenario.currentAqi;
+  const currentPm25 = pollutionSpike ? 98.4 : environment?.pm25UgM3 ?? scenario.pm25;
+  const hasPollutionWarning = currentAqi > 100;
+  const aqiLabels = {
+    good: 'Baik',
+    moderate: 'Sedang',
+    unhealthy_sensitive: 'Tidak sehat bagi kelompok sensitif',
+    unhealthy: 'Tidak sehat',
+    very_unhealthy: 'Sangat tidak sehat',
+    hazardous: 'Berbahaya',
+  };
+  const aqiStatus = pollutionSpike
+    ? 'Sangat Tidak Sehat'
+    : environment
+      ? aqiLabels[environment.aqiCategory]
+      : scenario.currentAqiStatus;
 
   const normalTips = [
     'Aero udah scan rute Senayan nih. Udara 38% lebih bersih dari arteri Semanggi!',
@@ -93,7 +165,7 @@ export default function HomeScreen({
             </span>
 
             <h1 className="text-xl font-black text-[#192A24] tracking-tight leading-tight">
-              Selamat pagi, Sarah!
+              Selamat pagi, {userName}!
             </h1>
 
             <div
@@ -110,8 +182,8 @@ export default function HomeScreen({
               />
               <span>
                 {hasPollutionWarning
-                  ? `${pollutionSpike ? 210 : scenario.currentAqi} AQI (Sensitif Waspada)`
-                  : '18 AQI Senayan (Sangat Bersih)'}
+                  ? `${currentAqi} AQI (${aqiStatus})`
+                  : `${currentAqi} AQI (${aqiStatus})`}
               </span>
             </div>
 
@@ -151,9 +223,9 @@ export default function HomeScreen({
         </div>
       </div>
 
-      <div
+      {isDemoMode && <div
         onClick={() => {
-          onSelectDestination('sudirman_binus');
+          onSelectDestination('sudirman_binus', transportMode);
           onGoToRoute();
         }}
         className="cursor-pointer group flex items-center justify-between p-3.5 rounded-2xl bg-[#245C49] text-white shadow-md hover:bg-[#1B4738] transition-all"
@@ -165,7 +237,7 @@ export default function HomeScreen({
           <div>
             <div className="flex items-center gap-1.5">
               <span className="text-[10px] font-extrabold uppercase px-1.5 py-0.2 rounded bg-[#1B4738] text-[#BFE0CD]">
-                DEMO JURI
+                SIMULASI DEMO
               </span>
             </div>
             <p className="text-xs font-bold text-white tracking-tight">
@@ -178,7 +250,7 @@ export default function HomeScreen({
           <span>Mulai</span>
           <ArrowRight className="w-3.5 h-3.5" />
         </button>
-      </div>
+      </div>}
 
       <div className="relative">
         <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#5C7267]">
@@ -188,6 +260,11 @@ export default function HomeScreen({
           type="text"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' && searchQuery.trim()) {
+                onSearchDestination(searchQuery.trim(), transportMode);
+              }
+            }}
           placeholder="Cari tujuan atau tempat sehat..."
           className="w-full pl-10 pr-10 py-3 rounded-2xl bg-white border border-[#E3ECE6] text-[#192A24] placeholder-[#8A9E93] text-xs font-medium focus:outline-none focus:border-[#245C49] shadow-sm"
         />
@@ -208,7 +285,7 @@ export default function HomeScreen({
           return (
             <button
               key={item.id}
-              onClick={() => setTransportMode(item.id as any)}
+              onClick={() => onChangeTransportMode(item.id as TransportMode)}
               className={`flex items-center justify-center gap-1.5 py-2.5 px-2 rounded-xl text-xs font-bold transition-all ${
                 isActive
                   ? 'bg-[#245C49] text-white shadow-sm'
@@ -234,7 +311,7 @@ export default function HomeScreen({
                 : 'bg-[#FEF3C7] text-[#D97706] border border-[#FDE68A]'
             }`}
           >
-            ● {pollutionSpike ? 'Sangat Tidak Sehat' : 'Sensitif Waspada'}
+            ● {aqiStatus}
           </span>
         </div>
 
@@ -245,12 +322,12 @@ export default function HomeScreen({
                 pollutionSpike ? 'text-[#D9534F]' : 'text-[#192A24]'
               }`}
             >
-              {pollutionSpike ? '210' : '142'}
+              {currentAqi}
             </span>
             <span className="text-xs font-bold text-[#5C7267]">AQI US</span>
           </div>
           <span className="text-[11px] text-[#5C7267]">
-          Bundaran HI • 4 mnt lalu
+            {detectedLocation}
           </span>
         </div>
 
@@ -258,18 +335,22 @@ export default function HomeScreen({
           <div>
             <span className="block text-[10px] text-[#5C7267]">PM 2.5</span>
             <span className="text-xs font-bold text-[#192A24]">
-              {pollutionSpike ? '98.4 µg/m³' : '56.8 µg/m³'}
+              {currentPm25.toFixed(1)} µg/m³{environment?.pm25IsEstimated ? ' (estimasi)' : ''}
             </span>
           </div>
           <div className="border-x border-[#E3ECE6]">
             <span className="block text-[10px] text-[#5C7267]">Suhu</span>
-            <span className="text-xs font-bold text-[#192A24]">31°C</span>
-            <span className="block text-[9px] text-[#5C7267]">Terasa 34°</span>
+            <span className="text-xs font-bold text-[#192A24]">
+              {environment ? environment.temperatureC === null ? '—' : `${environment.temperatureC}°C` : `${scenario.temp}°C`}
+            </span>
+            <span className="block text-[9px] text-[#5C7267]">Suhu</span>
           </div>
           <div>
             <span className="block text-[10px] text-[#5C7267]">Kelembaban</span>
-            <span className="text-xs font-bold text-[#192A24]">72%</span>
-            <span className="block text-[9px] text-[#5C7267]">Lembab</span>
+            <span className="text-xs font-bold text-[#192A24]">
+              {environment ? environment.humidityPct === null ? '—' : `${environment.humidityPct}%` : `${scenario.humidity}%`}
+            </span>
+            <span className="block text-[9px] text-[#5C7267]">Kelembapan</span>
           </div>
         </div>
 
@@ -302,8 +383,7 @@ export default function HomeScreen({
         <div className="space-y-2">
           <div
             onClick={() => {
-              onSelectDestination('sudirman_binus');
-              onGoToRoute();
+              onSearchDestination('Menara Astra Jakarta', transportMode);
             }}
             className="p-3 rounded-2xl bg-white border border-[#E3ECE6] hover:border-[#245C49] flex items-center justify-between cursor-pointer transition-all shadow-sm"
           >
@@ -312,21 +392,21 @@ export default function HomeScreen({
                 <Building2 className="w-4 h-4" />
               </div>
               <div>
-                <p className="text-xs font-bold text-[#192A24]">Kantor (Sudirman)</p>
-                <p className="text-[11px] text-[#5C7267]">6.8 km • Estimasi 22 mnt</p>
+                <p className="text-xs font-bold text-[#192A24]">Menara Astra (Sudirman)</p>
+                <p className="text-[11px] text-[#5C7267]">Sudirman, Jakarta</p>
               </div>
             </div>
             <div className="text-right">
               <span className="inline-block px-2.5 py-0.5 rounded-full bg-[#E8F0EB] text-[#245C49] font-bold text-[10px]">
-                ● 42 AQI
+                LIVE
               </span>
-              <p className="text-[10px] text-[#5C7267] mt-0.5">Sehat & Bersih</p>
+              <p className="text-[10px] text-[#5C7267] mt-0.5">Pencarian lokasi</p>
             </div>
           </div>
 
           <div
             onClick={() => {
-              onSelectDestination('sudirman_binus');
+              onSelectDestination('sudirman_binus', transportMode);
               onGoToRoute();
             }}
             className="p-3 rounded-2xl bg-white border-2 border-[#245C49]/40 bg-[#F4F9F6] flex items-center justify-between cursor-pointer transition-all shadow-sm"
@@ -339,23 +419,23 @@ export default function HomeScreen({
                 <p className="text-xs font-bold text-[#192A24] flex items-center gap-1.5">
                   Kampus (Binus University)
                   <span className="text-[9px] px-1 rounded bg-[#245C49] text-white font-extrabold">
-                    DEMO
+                    PRESET
                   </span>
                 </p>
-                <p className="text-[11px] text-[#5C7267]">12.4 km • Estimasi 38 mnt</p>
+                <p className="text-[11px] text-[#5C7267]">FX Sudirman → Binus Anggrek</p>
               </div>
             </div>
             <div className="text-right">
               <span className="inline-block px-2.5 py-0.5 rounded-full bg-[#FEF3C7] text-[#D97706] font-bold text-[10px]">
-                ● 86 AQI
+                PRESET
               </span>
-              <p className="text-[10px] text-[#5C7267] mt-0.5">Sedang</p>
+              <p className="text-[10px] text-[#5C7267] mt-0.5">Analisis saat dipilih</p>
             </div>
           </div>
 
           <div
             onClick={() => {
-              onSelectDestination('tebet_scbd');
+              onSelectDestination('tebet_scbd', transportMode);
               onGoToRoute();
             }}
             className="p-3 rounded-2xl bg-white border border-[#E3ECE6] hover:border-[#245C49] flex items-center justify-between cursor-pointer transition-all shadow-sm"
@@ -365,15 +445,15 @@ export default function HomeScreen({
                 <HomeIcon className="w-4 h-4" />
               </div>
               <div>
-                <p className="text-xs font-bold text-[#192A24]">Rumah (Tebet)</p>
-                <p className="text-[11px] text-[#5C7267]">4.1 km • Estimasi 15 mnt</p>
+                <p className="text-xs font-bold text-[#192A24]">Tebet → SCBD</p>
+                <p className="text-[11px] text-[#5C7267]">Skenario rute</p>
               </div>
             </div>
             <div className="text-right">
               <span className="inline-block px-2.5 py-0.5 rounded-full bg-[#E8F0EB] text-[#245C49] font-bold text-[10px]">
-                ● 35 AQI
+                PRESET
               </span>
-              <p className="text-[10px] text-[#5C7267] mt-0.5">Sangat Baik</p>
+              <p className="text-[10px] text-[#5C7267] mt-0.5">Analisis saat dipilih</p>
             </div>
           </div>
         </div>

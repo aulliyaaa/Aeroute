@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import {
   ArrowUpRight,
   ShieldCheck,
@@ -9,6 +9,7 @@ import {
   Trees,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import { RouteAnalysisOption } from '@/lib/types';
 import MascotAI from './MascotAI';
 
 interface ActiveNavModalProps {
@@ -16,6 +17,8 @@ interface ActiveNavModalProps {
   onClose: () => void;
   onFinish: () => void;
   selectedRoute: 'green' | 'red';
+  destinationName: string;
+  routeData: RouteAnalysisOption | null;
 }
 
 export default function ActiveNavModal({
@@ -23,31 +26,17 @@ export default function ActiveNavModal({
   onClose,
   onFinish,
   selectedRoute,
+  destinationName,
+  routeData,
 }: ActiveNavModalProps) {
-  const [speed, setSpeed] = useState(38);
-  const [distanceRemaining, setDistanceRemaining] = useState(7.9);
-  const [stepIndex, setStepIndex] = useState(0);
-
-  const navSteps = [
-    { instruction: '250m Belok Kiri ke Jl. Asia Afrika', note: 'Memasuki Koridor Bersih Senayan', aqi: 24, safe: true },
-    { instruction: '800m Lurus terus melintasi Hutan Kota GBK', note: 'Area Kanopi Rindang (Filter Alami)', aqi: 20, safe: true },
-    { instruction: '1.2 km Ambil jalur kanan menuju Palmerah', note: 'Menghindari Simpang Semanggi (-38% Emisi)', aqi: 28, safe: true },
-    { instruction: '300m Tiba di Kampus Binus Anggrek', note: 'Perjalanan Bersih Selesai!', aqi: 32, safe: true },
-  ];
-
-  useEffect(() => {
-    if (!isOpen) return;
-    const interval = setInterval(() => {
-      setDistanceRemaining((prev) => (prev > 0.5 ? Number((prev - 0.2).toFixed(1)) : 0.3));
-      setSpeed(Math.floor(35 + Math.random() * 8));
-      setStepIndex((prev) => (prev + 1) % navSteps.length);
-    }, 4000);
-    return () => clearInterval(interval);
-  }, [isOpen]);
-
   if (!isOpen) return null;
 
-  const currentStep = navSteps[stepIndex];
+  const steps = routeData?.steps ?? [];
+  const currentStep = steps[0];
+  const distanceRemaining = routeData?.distanceKm ?? null;
+  const arrivalTime = routeData
+    ? new Date(Date.now() + routeData.durationMinutes * 60000)
+    : null;
 
   const handleComplete = () => {
     confetti({
@@ -82,35 +71,37 @@ export default function ActiveNavModal({
           </div>
 
           <h3 className="text-base font-black text-white leading-tight">
-            {currentStep.instruction}
+            {currentStep?.instruction ?? `Ikuti rute pada peta menuju ${destinationName}.`}
           </h3>
 
           <div className="flex items-center gap-1.5 text-xs text-[#CDE5D7] font-medium">
             <Trees className="w-3.5 h-3.5 text-[#BFE0CD]" />
-            <span>{currentStep.note}</span>
+            <span>{currentStep?.name || (currentStep ? 'Instruksi dari Mapbox' : 'Instruksi belokan belum tersedia')}</span>
           </div>
         </div>
 
         <div className="p-3.5 rounded-2xl bg-[#F8FAF8] border border-[#E3ECE6] space-y-3">
           <div className="flex items-center justify-between text-xs">
-            <span className="text-[#5C7267] font-bold">Sensor Udara Real-Time</span>
+            <span className="text-[#5C7267] font-bold">Kualitas Udara Rute</span>
             <span className="px-2 py-0.5 rounded-full bg-[#E8F0EB] text-[#245C49] font-bold text-[10px] flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#245C49] animate-ping" />
-              Sensor Aktif
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+              Panduan tanpa GPS
             </span>
           </div>
 
           <div className="flex items-center justify-between">
             <div>
               <span className="text-3xl font-black text-[#245C49] tracking-tight">
-                {currentStep.aqi}
+                {routeData?.aqi ?? '—'}
               </span>
-              <span className="text-xs text-[#5C7267] font-bold ml-1">AQI Realtime</span>
+              <span className="text-xs text-[#5C7267] font-bold ml-1">AQI estimasi</span>
             </div>
             <div className="text-right">
-              <span className="text-sm font-bold text-[#192A24]">42 µg PM2.5</span>
+              <span className="text-sm font-bold text-[#192A24]">
+                {routeData ? `${routeData.pm25UgM3} µg/m³ PM2.5` : 'PM2.5 —'}
+              </span>
               <span className="block text-[10px] text-[#245C49] font-bold">
-                Terproteksi dari Asap Semanggi
+                {selectedRoute === 'green' ? 'Rute rekomendasi' : 'Rute tercepat'}
               </span>
             </div>
           </div>
@@ -118,15 +109,17 @@ export default function ActiveNavModal({
           <div className="grid grid-cols-3 gap-2 pt-2 border-t border-[#E3ECE6] text-center text-xs">
             <div>
               <span className="block text-[10px] text-[#5C7267]">Kecepatan</span>
-              <span className="font-extrabold text-[#192A24]">{speed} km/j</span>
+              <span className="font-extrabold text-[#192A24]">—</span>
             </div>
             <div>
-              <span className="block text-[10px] text-[#5C7267]">Jarak Sisa</span>
-              <span className="font-extrabold text-[#192A24]">{distanceRemaining} km</span>
+              <span className="block text-[10px] text-[#5C7267]">Jarak Rute</span>
+              <span className="font-extrabold text-[#192A24]">{distanceRemaining === null ? '—' : `${distanceRemaining.toFixed(1)} km`}</span>
             </div>
             <div>
               <span className="block text-[10px] text-[#5C7267]">Estimasi Tiba</span>
-              <span className="font-extrabold text-[#245C49]">09:15</span>
+              <span className="font-extrabold text-[#245C49]">
+                {arrivalTime?.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) ?? '—'}
+              </span>
             </div>
           </div>
 
@@ -134,7 +127,7 @@ export default function ActiveNavModal({
             <MascotAI
               pose="map"
               size="sm"
-              message="Udara di segmen ini bersih banget! Tetap ikuti jalur Senayan ya!"
+              message="Ikuti instruksi rute yang ditampilkan. Pelacakan GPS tidak digunakan."
             />
           </div>
         </div>

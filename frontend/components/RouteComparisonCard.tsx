@@ -46,27 +46,35 @@ export default function RouteComparisonCard({
         </div>
 
         <div className="flex items-baseline gap-2 mb-1">
-          <span className="text-2xl font-black text-[#192A24] tracking-tight">32 mnt</span>
-          <span className="text-xs font-semibold text-[#5C7267]">
-            (+7 mnt vs arteri)
+          <span className="text-2xl font-black text-[#192A24] tracking-tight">
+            {greenRoute.durationMinutes} mnt
           </span>
-          <span className="text-xs text-[#5C7267]">• 8.4 km</span>
+          {greenRoute.durationComparisonText && (
+            <span className="text-xs font-semibold text-[#5C7267]">
+              ({greenRoute.durationComparisonText})
+            </span>
+          )}
+          <span className="text-xs text-[#5C7267]">• {greenRoute.distanceKm} km</span>
         </div>
 
         <div className="flex items-center gap-1.5 text-xs font-bold text-[#245C49] mb-3">
           <span className="w-2.5 h-2.5 rounded-full bg-[#245C49]" />
-          <span>Paparan Polusi Rendah (AQI 58)</span>
+          <span>{greenRoute.aqiLabel}</span>
         </div>
 
         <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-[#CDE5D7]">
-          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-white border border-[#CDE5D7] text-[#245C49] text-[11px] font-bold shadow-2xs">
-            <ShieldCheck className="w-3.5 h-3.5 text-[#245C49]" />
-            -42µg Partikel Terhindar
-          </span>
-          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-white border border-[#CDE5D7] text-[#5C7267] text-[11px] font-medium shadow-2xs">
-            <Trees className="w-3.5 h-3.5 text-[#245C49]" />
-            Koridor Taman Senayan
-          </span>
+          {greenRoute.partikelTerhindar && (
+            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-white border border-[#CDE5D7] text-[#245C49] text-[11px] font-bold shadow-2xs">
+              <ShieldCheck className="w-3.5 h-3.5 text-[#245C49]" />
+              {greenRoute.partikelTerhindar}
+            </span>
+          )}
+          {greenRoute.corridorName && (
+            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-white border border-[#CDE5D7] text-[#5C7267] text-[11px] font-medium shadow-2xs">
+              <Trees className="w-3.5 h-3.5 text-[#245C49]" />
+              {greenRoute.corridorName}
+            </span>
+          )}
         </div>
       </div>
 
@@ -82,9 +90,11 @@ export default function RouteComparisonCard({
       >
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-black text-[#192A24] tracking-tight">25 mnt</span>
+            <span className="text-2xl font-black text-[#192A24] tracking-tight">
+              {redRoute.durationMinutes} mnt
+            </span>
             <span className="text-xs font-bold text-[#D9534F]">Tercepat</span>
-            <span className="text-xs text-[#5C7267]">• 7.1 km</span>
+            <span className="text-xs text-[#5C7267]">• {redRoute.distanceKm} km</span>
           </div>
 
           <div
@@ -100,12 +110,12 @@ export default function RouteComparisonCard({
 
         <div className="flex items-center gap-1.5 text-xs font-bold text-[#D9534F] mb-2.5">
           <span className="w-2.5 h-2.5 rounded-full bg-[#D9534F]" />
-          <span>Paparan Polusi Tinggi (AQI 154)</span>
+          <span>{redRoute.aqiLabel}</span>
         </div>
 
         <div className="flex items-center gap-1.5 text-[11px] text-[#5C7267] pt-1 border-t border-[#E3ECE6]">
           <AlertTriangle className="w-3.5 h-3.5 text-[#D9534F] flex-shrink-0" />
-          <span className="truncate">Kemacetan padat & asap knalpot Jl. Gatot Subroto</span>
+          <span className="truncate">{redRoute.warning || redRoute.description || 'Peringatan tidak tersedia.'}</span>
         </div>
       </div>
     </div>

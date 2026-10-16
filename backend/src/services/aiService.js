@@ -1,4 +1,4 @@
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import { config } from '../config/env.js';
 
 export const generateHealthInsight = async ({ userProfile, fastestAqi, aeroAqi, durationFastest, durationAero }) => {
@@ -7,11 +7,12 @@ export const generateHealthInsight = async ({ userProfile, fastestAqi, aeroAqi, 
       throw new Error('GEMINI_API_KEY belum dikonfigurasi.');
     }
 
-    const ai = new GoogleGenAI({ apiKey: config.geminiApiKey });
+    const ai = new GoogleGenerativeAI(config.geminiApiKey);
+    const model = ai.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
     const prompt = `
-    Kamu adalah mesin AI pakar kesehatan paru-paru dan navigasi bebas polusi untuk aplikasi "AeroPath AI".
-    Analisis data perjalanan berikut dan berikan respon HANYA dalam bentuk JSON valid (tanpa markdown, tanpa kata pembuka/penutup):
+  Kamu adalah asisten informasi kualitas udara dan rute untuk aplikasi "AeroPath". Jangan mendiagnosis atau menjanjikan hasil medis.
+  Analisis data perjalanan berikut dan berikan respons HANYA dalam bentuk JSON valid (tanpa markdown, tanpa kata pembuka/penutup):
 
     Data Perjalanan:
     - Profil Medis User: ${userProfile || 'Sensitif / Asma'}
@@ -27,14 +28,21 @@ export const generateHealthInsight = async ({ userProfile, fastestAqi, aeroAqi, 
     }
     `;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: prompt,
-    });
+    const response = await model.generateContent(prompt);
 
-    const responseText = response.text.trim();
+    const responseText = response.response.text().trim();
     const cleanedJson = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
-    return JSON.parse(cleanedJson);
+    const insight = JSON.parse(cleanedJson);
+    if (
+      typeof insight.inhalation_reduction_percent !== 'number' ||
+      typeof insight.exposure_score_percent !== 'number' ||
+      typeof insight.recommendation_reason !== 'string' ||
+      typeof insight.ai_alert_warning !== 'string'
+    ) {
+      throw new Error('Format respons AI tidak valid.');
+    }
+
+    return { ...insight, source: 'gemini', isFallback: false };
 
   } catch (error) {
     console.error('Error Gemini AI SDK (Using Fallback Data):', error.message);
@@ -42,7 +50,9 @@ export const generateHealthInsight = async ({ userProfile, fastestAqi, aeroAqi, 
       inhalation_reduction_percent: 38,
       exposure_score_percent: 62,
       recommendation_reason: "AI merekomendasikan Rute Lower Exposure untuk Anda yang sensitif terhadap polusi udara. Meskipun butuh 7 menit lebih lama, estimasi polutan terhirup 38% lebih rendah berkat sirkulasi vegetasi koridor hijau.",
-      ai_alert_warning: "PERINGATAN ASMA: Rute Tercepat berisiko memicu serangan sesak napas dalam 15 menit akibat paparan PM2.5 tinggi!"
+      ai_alert_warning: "Estimasi AQI rute tercepat lebih tinggi. Pertimbangkan rute dengan kualitas udara lebih baik; informasi ini bukan diagnosis medis.",
+      source: 'fallback',
+      isFallback: true
     };
   }
 };

@@ -5,7 +5,13 @@ import MapboxRouteMap from './MapboxRouteMap';
 import RouteComparisonCard from './RouteComparisonCard';
 import ExposureCard from './ExposureCard';
 import { ArrowUpDown, Share2, Navigation, Info } from 'lucide-react';
-import { ScenarioPreset, MedicalProfile } from '@/lib/types';
+import {
+  MedicalProfile,
+  RouteAnalysisOption,
+  RouteAnalysisResponse,
+  RouteOption,
+  ScenarioPreset,
+} from '@/lib/types';
 
 interface RouteScreenProps {
   scenario: ScenarioPreset;
@@ -17,7 +23,45 @@ interface RouteScreenProps {
   onStartNavigation: () => void;
   onShareRoute: () => void;
   isSimulating: boolean;
+  routeAnalysis?: RouteAnalysisResponse['data'] | null;
 }
+
+const toRouteOption = (
+  route: RouteAnalysisOption | undefined,
+  fallback: RouteOption,
+  isRecommended: boolean,
+  fastestDuration: number
+): RouteOption => {
+  if (!route) return fallback;
+
+  const aqiColor = route.aqi > 150 ? 'red' : route.aqi > 100 ? 'amber' : 'green';
+  const aqiDescriptions = {
+    good: 'baik',
+    moderate: 'sedang',
+    unhealthy_sensitive: 'tidak sehat bagi kelompok sensitif',
+    unhealthy: 'tidak sehat',
+    very_unhealthy: 'sangat tidak sehat',
+    hazardous: 'berbahaya',
+  };
+
+  return {
+    ...fallback,
+    durationMinutes: route.durationMinutes,
+    durationComparisonText: route.isFastest
+      ? 'Tercepat'
+      : `+${Math.max(0, route.durationMinutes - fastestDuration)} mnt vs tercepat`,
+    distanceKm: route.distanceKm,
+    aqi: route.aqi,
+    aqiLabel: `Paparan polusi ${aqiDescriptions[route.aqiCategory]} (AQI ${route.aqi})`,
+    aqiColor,
+    badge: isRecommended ? 'RECOMMENDED' : route.isFastest ? 'Tercepat' : undefined,
+    corridorName: undefined,
+    partikelTerhindar: route.estimatedPm25InhaledUg === null
+      ? undefined
+      : `${route.estimatedPm25InhaledUg} µg estimasi PM2.5 terhirup`,
+    warning: route.warning || undefined,
+  };
+};
 
 export default function RouteScreen({
   scenario,
@@ -29,8 +73,30 @@ export default function RouteScreen({
   onStartNavigation,
   onShareRoute,
   isSimulating,
+  routeAnalysis,
 }: RouteScreenProps) {
   const isGreen = selectedRoute === 'green';
+  const recommendedRoute = routeAnalysis?.routes.find(
+    (route) => route.id === routeAnalysis.recommendedRouteId
+  );
+  const fastestRoute = routeAnalysis?.routes.find(
+    (route) => route.id === routeAnalysis.fastestRouteId
+  );
+  const greenRoute = toRouteOption(
+    recommendedRoute,
+    scenario.greenRoute,
+    true,
+    fastestRoute?.durationMinutes ?? scenario.redRoute.durationMinutes
+  );
+  const redRoute = toRouteOption(
+    fastestRoute,
+    scenario.redRoute,
+    false,
+    fastestRoute?.durationMinutes ?? scenario.redRoute.durationMinutes
+  );
+  const selectedRouteData = routeAnalysis?.routes.find(
+    (route) => route.id === (isGreen ? recommendedRoute?.id : fastestRoute?.id)
+  );
 
   return (
     <div className="space-y-4 pb-4 animate-in fade-in duration-300">
@@ -42,6 +108,17 @@ export default function RouteScreen({
         originName={scenario.origin.name}
         destName={scenario.destination.name}
         isSimulating={isSimulating}
+        routeGeometries={{
+          green: recommendedRoute?.geometry?.coordinates ?? null,
+          red: fastestRoute?.geometry?.coordinates ?? null,
+        }}
+        exposureReductionPercent={routeAnalysis?.insight.exposureReductionPercent}
+        originCoordinates={routeAnalysis
+          ? [routeAnalysis.origin.coordinates.longitude, routeAnalysis.origin.coordinates.latitude]
+          : undefined}
+        destinationCoordinates={routeAnalysis
+          ? [routeAnalysis.destination.coordinates.longitude, routeAnalysis.destination.coordinates.latitude]
+          : undefined}
       />
 
       <div className="p-4 rounded-2xl bg-white border border-[#E3ECE6] shadow-sm flex items-center justify-between gap-3">
@@ -78,8 +155,8 @@ export default function RouteScreen({
       </div>
 
       <RouteComparisonCard
-        greenRoute={scenario.greenRoute}
-        redRoute={scenario.redRoute}
+        greenRoute={greenRoute}
+        redRoute={redRoute}
         selectedRoute={selectedRoute}
         onSelectRoute={onSelectRoute}
       />
@@ -87,12 +164,20 @@ export default function RouteScreen({
       <ExposureCard
         selectedRoute={selectedRoute}
         medicalProfile={medicalProfile}
-        aiExplanation={scenario.aiExplanation}
+        aiExplanation={routeAnalysis?.insight.recommendationReason ?? scenario.aiExplanation}
+        routeData={selectedRouteData}
+        exposureReductionPercent={routeAnalysis?.insight.exposureReductionPercent}
+        exposureScorePercent={routeAnalysis?.insight.exposureScorePercent}
+        insightWarning={routeAnalysis?.insight.warning}
       />
 
       <div className="flex items-center gap-2 px-2 text-[11px] text-[#5C7267]">
         <Info className="w-4 h-4 text-[#5C7267] flex-shrink-0" />
-        <p>Estimasi paparan berdasarkan pemodelan polusi temporal & durasi tempuh.</p>
+        <p>
+          {routeAnalysis
+            ? 'AQI rute adalah estimasi dari data kualitas udara di titik asal.'
+            : 'Estimasi paparan berdasarkan pemodelan polusi temporal & durasi tempuh.'}
+        </p>
       </div>
 
       {/* Action Bar Normal (Bukan Sticky/Floating) */}
