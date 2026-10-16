@@ -1,0 +1,25 @@
+{
+  "name": "AeroRoute - Navigasi Bersih Berbasis AI",
+  "short_name": "AeroRoute",
+  "description": "Smart clean-air routing tailored for sensitive respiratory profiles in urban environments.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#090d0e",
+  "theme_color": "#0d2820",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
+
